@@ -1,0 +1,193 @@
+#include <xinu.h>
+
+static inline void mark_user(const pid32 pid) {
+    proctab[pid].user_process = TRUE;   /* mark as user process */
+}
+
+/* Busy leaf that stays alive so we can see it in the table */
+process leaf(void) {
+    while (TRUE) { sleep(1); }
+    return OK;
+}
+
+/* A spawns A1,A2,A3 */
+process nodeA(void) {
+    pid32 a1 = create(leaf, 8192, 22, "A1", 0, NULL); mark_user(a1); resume(a1);
+    pid32 a2 = create(leaf, 8192, 21, "A2", 0, NULL); mark_user(a2); resume(a2);
+    pid32 a3 = create(leaf, 8192, 20, "A3", 0, NULL); mark_user(a3); resume(a3);
+    while (TRUE) { sleep(1); }
+    return OK;
+}
+
+/* B spawns B1,B2,B3,B4  */
+process nodeB(void) {
+    pid32 b1 = create(leaf, 8192, 23, "B1", 0, NULL); mark_user(b1); resume(b1);
+    pid32 b2 = create(leaf, 8192, 22, "B2", 0, NULL); mark_user(b2); resume(b2);
+    pid32 b3 = create(leaf, 8192, 21, "B3", 0, NULL); mark_user(b3); resume(b3);
+    pid32 b4 = create(leaf, 8192, 20, "B4", 0, NULL); mark_user(b4); resume(b4);
+    while (TRUE) { sleep(1); }
+    return OK;
+}
+
+/* D spawns D1,D2 */
+process nodeD(void) {
+    pid32 d1 = create(leaf, 8192, 21, "D1", 0, NULL); mark_user(d1); resume(d1);
+    pid32 d2 = create(leaf, 8192, 20, "D2", 0, NULL); mark_user(d2); resume(d2);
+    while (TRUE) { sleep(1); }
+    return OK;
+}
+
+/* For each alive user process, print its all children process 
+   Output format: Process_name<PID>:: x x x x x (children process PID)
+            e.g., P<5>:: 6 7 8 9 10
+                  A<6>:: 11 12 13                                   
+                  B<7>:: 14 15 16 17*/
+static void print_user_tree(const char *title) {
+    int i, j;
+    bool8 is_any_user_process_alive = FALSE; /* Check if there is any user process alive after cascading termination */
+    kprintf("\n------ %s ------\n", title);
+    kprintf("%s\t%s\t%s\n", "PrName", "PID", "Children PID");
+    for (i = 0; i < NPROC; i++) {
+        if (proctab[i].prstate != PR_FREE && proctab[i].user_process == TRUE) {
+            is_any_user_process_alive = TRUE;
+            kprintf("%s\t<%d>\t", proctab[i].prname, i);
+            for (j = 0; j < NPROC; j++) {               /* list current process's all children process */
+                if ( proctab[j].prstate != PR_FREE &&
+                     proctab[j].user_process == TRUE &&
+                     proctab[j].prparent == i) {
+                    kprintf("%d ", j);
+                }
+            }
+            kprintf("\n");
+        }
+    }
+    if (is_any_user_process_alive == FALSE) {
+        kprintf("\nThere is no any user process alive.\n");
+    }
+}
+
+/*
+static void print_whole_process_tree() {
+    int i, j;
+    kprintf("%s\t%s\t%s\t%s\t%s\n", "Prname", "PID", "Prstate", "ParentID", "ChildrenID");
+    for (i = 0; i < NPROC; i++) {
+        if (i == 0) {
+            kprintf("%s\t<%d>\t%d\t\t\t", proctab[i].prname, i, proctab[i].prstate);
+        } else {
+            kprintf("%s\t<%d>\t%d\t%d\t", proctab[i].prname, i, proctab[i].prstate, proctab[i].prparent);
+        }
+        for (j = 0; j < NPROC; j++) {
+            if (proctab[j].prparent == i && proctab[j].prname[0] != NULLCH) {
+                kprintf("%d ", j);
+            }
+        }
+        kprintf("\n");
+        if (proctab[i].prname[0] == NULLCH) {
+            break;
+        }
+    }
+}
+*/
+
+/* Root P spawns nodes A,B,C,D,E (C,E are leaves; A,B,D spawn more) */
+process rootP(void) {
+    pid32 A = create(nodeA, 8192, 44, "A", 0, NULL); mark_user(A); resume(A);
+    pid32 B = create(nodeB, 8192, 43, "B", 0, NULL); mark_user(B); resume(B);
+    pid32 C = create(leaf,  8192, 42, "C", 0, NULL); mark_user(C); resume(C);
+    pid32 D = create(nodeD, 8192, 41, "D", 0, NULL); mark_user(D); resume(D);
+    pid32 E = create(leaf,  8192, 40, "E", 0, NULL); mark_user(E); resume(E);
+    while (TRUE) { sleep(1); }
+    return OK;
+}
+
+/*
+    The created user process tree: (0-4 are system processes)
+                 __________________________________________
+                |                                          |
+                |                P(pid = 5)                |
+                |__________________________________________|
+                /              /        |         \          \
+               /              /         |          \          \
+             A(6)           B(7)       C(8)       D(9)        E(10)
+        /    /  |       /   / \   \               /  \
+       /    /   |      /   /   \   \             /    \
+      A1   A2   A3    B1   B2  B3   B4          D1    D2
+     (11) (12) (13)  (14) (15) (16) (17)       (18)   (19)
+
+*/
+
+/* ---------- main test ---------- */
+
+process main(void)
+{
+    kprintf("\n---------------------------Main.Kill Testcases----------------------------------\n");
+    kprintf("\n[TEST P1] building user process tree...\n");
+
+    pid32 P = create(rootP, 8192, 50, "P", 0, NULL);
+    mark_user(P);
+    resume(P);
+
+    sleep(2);   /* give time for all children/grandchildren to be created */
+
+    // print_whole_process_tree();
+    // kprintf("--------------------------------------------------------------------------------------");
+
+    print_user_tree("Before any kill");
+
+    /* --- Scenario 1: kill a leaf (expect only that leaf to disappear) --- */
+    /* Find one B-child (e.g., a PID whose parent is named B) */
+    pid32 leaf_to_kill = -1, bpid = -1;
+    int i;
+    /* locate B */
+    for (i = 0; i < NPROC; i++) {
+        if ( strncmp(proctab[i].prname, "B", 2) == 0 &&
+             proctab[i].prstate != PR_FREE && 
+             proctab[i].user_process == TRUE) { 
+            bpid = i; 
+            break; 
+        }
+    }
+    /* locate the first child of B */
+    if (bpid >= 0) {
+        int j;
+        for (j = 0; j < NPROC; j++) {
+            if ( proctab[j].prparent == bpid &&
+                 proctab[j].prstate != PR_FREE && 
+                 proctab[j].user_process) { 
+                leaf_to_kill = j; 
+                break; 
+            }
+        }
+    }
+    if (leaf_to_kill >= 0) {
+        kprintf("\n\n[Scenario 1] kill leaf %s (pid = %d)\n", proctab[leaf_to_kill].prname, leaf_to_kill);
+        kill(leaf_to_kill);
+        sleep(1);
+        print_user_tree("After killing the leaf B1");
+    } else {
+        kprintf("\n\n[Scenario 1] couldn't locate a B-child leaf.\n");
+    }
+
+
+
+    /* --- Scenario 2: kill a parent (B) -> should cascade terminate B and its children B1(already terminated),B2,B3,B4 --- */
+    if (bpid >= 0 && proctab[bpid].prstate != PR_FREE) {
+        kprintf("\n\n[Scenario 2] kill parent B (pid=%d) -> expect to cascade terminate B1(already terminated),B2,B3,B4\n", bpid);
+        kill(bpid);
+        sleep(1);
+        print_user_tree("After killing the parent B");
+    } else {
+        kprintf("\n\n[Scenario 2] parent B already gone or not found.\n");
+    }
+
+    /* --- Scenario 3: kill the root P -> whole remaining user tree should vanish --- */
+    if (proctab[P].prstate != PR_FREE) {
+        kprintf("\n\n[Scenario 3] kill ROOT P (pid=%d) -> expect full cascade and no any user process alive\n", P);
+        kill(P);
+        sleep(1);
+        print_user_tree("After killing the Root P");
+    }
+
+    kprintf("\n[TEST P1] done.\n");
+    return OK;
+}

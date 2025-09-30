@@ -1,0 +1,47 @@
+[TESTCASE-1]
+HELLO! I am process 5
+process 5:: forked child 6
+process 6:: pid=100
+GOODBYE! I am process 6
+process 5:: pid=6
+GOODBYE! I am process 5
+[END-TESTCASE-1]
+
+
+[TESTCASE-2]
+HELLO! I am process 7
+process 7:: forked child 8
+process 8:: forked child 9
+process 9:: forked child 10
+GOODBYE! I am process 10
+GOODBYE! I am process 9
+process 8:: forked child 11
+GOODBYE! I am process 11
+GOODBYE! I am process 8
+process 7:: forked child 12
+process 12:: forked child 13
+GOODBYE! I am process 13
+GOODBYE! I am process 12
+process 7:: forked child 14
+GOODBYE! I am process 14
+GOODBYE! I am process 7
+[END-TESTCASE-2]
+
+
+[TESTCASE-3]
+process 15:: forked child 16
+process 16:: forked child 17
+process 17:: forked child 18
+process 18:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=18, *v=100
+process 17:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=35, *v=18
+process 16:: forked child 19
+process 19:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=54, *v=100
+process 16:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=70, *v=19
+process 15:: forked child 20
+process 20:: forked child 21
+process 21:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=91, *v=100
+process 20:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=111, *v=21
+process 15:: forked child 22
+process 22:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=133, *v=100
+process 15:: c=0x5e7fe8, *c=26, d=0x5e7fe4, *d=148, *v=22
+[END-TESTCASE-3]
